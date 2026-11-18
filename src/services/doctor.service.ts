@@ -74,3 +74,20 @@ export async function deleteDoctor(doctorId: string) {
   await DoctorModel.deleteOne({ _id: doctorId });
   return { deleted: true, patientsDeleted: deletedCount };
 }
+
+// rebuilds every patientCount from the patients collection. used by seed and `npm run recount`
+export async function recountPatientCounts() {
+  const counts = await PatientModel.aggregate<{ _id: unknown; n: number }>([
+    { $group: { _id: '$doctor', n: { $sum: 1 } } },
+  ]);
+
+  const { modifiedCount } = await DoctorModel.bulkWrite([
+    // doctors with no patients wont show up in the $group
+    { updateMany: { filter: { _id: { $nin: counts.map((c) => c._id) } }, update: { $set: { patientCount: 0 } } } },
+    ...counts.map((c) => ({
+      updateOne: { filter: { _id: c._id }, update: { $set: { patientCount: c.n } } },
+    })),
+  ], { timestamps: false });
+
+  return { doctorsWithPatients: counts.length, updated: modifiedCount };
+}
