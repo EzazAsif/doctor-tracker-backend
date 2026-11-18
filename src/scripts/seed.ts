@@ -13,6 +13,7 @@ import { connectDB } from '../config/db';
 import { env } from '../config/env';
 import { UserModel } from '../models/User';
 import { DoctorModel } from '../models/Doctor';
+import { recountPatientCounts } from '../services/doctor.service';
 import { PatientModel, type CONDITIONS, type STATUSES } from '../models/Patient';
 
 // ---------- tiny deterministic PRNG (mulberry32) ----------
@@ -235,14 +236,8 @@ async function seed() {
   await PatientModel.insertMany(patientDocs);
   console.log(`Inserted ${patientDocs.length} patients`);
 
-  // set patientCount from the actual data
-  const counts = await PatientModel.aggregate<{ _id: mongoose.Types.ObjectId; n: number }>([
-    { $group: { _id: '$doctor', n: { $sum: 1 } } },
-  ]);
-  await DoctorModel.bulkWrite(
-    counts.map((c) => ({ updateOne: { filter: { _id: c._id }, update: { $set: { patientCount: c.n } }, timestamps: false } })),
-  );
-  console.log('patientCount updated for', counts.length, 'doctors');
+  const r = await recountPatientCounts();
+  console.log('patientCount set for', r.doctorsWithPatients, 'doctors');
   console.log('Demo login: admin@doctortracker.com / Admin@12345');
 }
 
