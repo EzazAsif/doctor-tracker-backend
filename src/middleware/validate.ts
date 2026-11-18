@@ -2,6 +2,10 @@ import type { RequestHandler } from 'express';
 import type { ZodType } from 'zod';
 import { ApiError } from '../utils/ApiError';
 
+// `?specialization=` from a cleared dropdown should mean "no filter", not "empty string"
+const dropEmpty = (q: Record<string, unknown>) =>
+  Object.fromEntries(Object.entries(q).filter(([, v]) => v !== '' && v !== undefined));
+
 type Schemas = { body?: ZodType; query?: ZodType; params?: ZodType };
 
 /**
@@ -17,7 +21,7 @@ export const validate =
     if (schemas.query) {
       // req.query is a getter in Express 5, so redefine it with the parsed value
       Object.defineProperty(req, 'query', {
-        value: schemas.query.parse(req.query),
+        value: schemas.query.parse(dropEmpty(req.query)),
         writable: true,
         configurable: true,
         enumerable: true,
