@@ -20,7 +20,7 @@ curl -X POST https://doctor-tracker-backend-eight.vercel.app/api/auth/login \
 
 ## Getting started
 
-Requirements: Node 20+ and a MongoDB database. A free Atlas cluster works fine. Transactions need a replica set, and every Atlas cluster is one.
+Requirements: Node 20+ and a MongoDB database. A free Atlas cluster works fine.
 
 1. **Clone and install**
    ```bash
@@ -51,6 +51,7 @@ Requirements: Node 20+ and a MongoDB database. A free Atlas cluster works fine. 
    ```bash
    npm run dev        # watch mode on http://localhost:5000
    npm run typecheck  # tsc --noEmit
+   npm run recount    # rebuild every doctor's patientCount
    npm run build && npm start
    ```
 
@@ -74,7 +75,7 @@ src/
   routes/       routers, wired together in routes/index.ts
   controllers/  thin HTTP layer: read the request, call a service, send JSON
   services/     business logic and queries
-  utils/        ApiError, search/date/pagination helpers, transaction helper
+  utils/        ApiError, search/date/pagination helpers
   scripts/      seed
 ```
 
@@ -121,11 +122,21 @@ The doctor list shows each doctor's patient count and can **sort by it**. There 
 The app reads far more often than it writes, so I chose the second option. The trade-off is keeping the counter correct:
 
 - It only changes in the patient service: `+1` on create, `-1` on delete, and `-1`/`+1` when a patient moves to another doctor.
-- Each of those writes runs in a **MongoDB transaction** together with the patient write (`utils/transaction.ts`, using `session.withTransaction`, which also retries transient errors). The patient and the counter commit together or not at all, so a crash between the two writes can't leave the count off by one.
+- **No multi-document transactions.** The API runs as stateless serverless functions, so each request is a short sequence of single-document writes that are atomic on their own, done in an order that is safe if the function dies partway:
+  - **Create:** insert the patient first, then `$inc` the doctor by `+1`. The counter is only bumped for a patient that was actually saved.
+  - **Delete:** `findOneAndDelete`, then `$inc -1` only if a document was really deleted. A double delete or a race returns 404 and leaves the count alone.
+  - **Move to another doctor:** `findByIdAndUpdate` returns the *previous* document, so the old doctor is read atomically with the update. After the update succeeds, `-1` on the old doctor and `+1` on the new one run in parallel.
+  - **Delete a doctor:** `deleteMany` their patients first, then delete the doctor. If it fails halfway, the doctor still exists and the request can simply be retried.
 - Clients can't set it: the zod schemas don't include `patientCount`, so it is stripped from request bodies.
-- The seed script computes it from the real data with one `$group`, and the dashboard reuses it for the per-specialization patient totals, so that query needs no join either.
+- The dashboard reuses it for the per-specialization patient totals, so that query needs no join either.
 
-If the counter ever drifted (for example after a manual database edit), a single `$group` + `bulkWrite` rebuilds it, which is the same code the seed uses.
+The worst case is a crash between the patient write and the `$inc`, which leaves a count off by one. For that there is a repair tool:
+
+```bash
+npm run recount
+```
+
+It rebuilds every `patientCount` with one `$group` aggregation over `patients` plus one `bulkWrite`, and sets doctors with no patients back to 0. The seed script uses the same function. It is idempotent, so it is safe to run at any time or on a schedule.
 
 ### 2. Indexing strategy for search, filtering and pagination
 
