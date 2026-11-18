@@ -1,5 +1,10 @@
 import { z } from 'zod';
 
+// "Required" reads better in a form than "expected string, received undefined"
+z.config({
+  customError: (issue) => (issue.code === 'invalid_type' && issue.input === undefined ? 'Required' : undefined),
+});
+
 export const objectId = z.string().regex(/^[a-f\d]{24}$/i, 'Must be a valid ObjectId');
 
 export const phone = z
