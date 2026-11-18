@@ -1,9 +1,8 @@
-import type { ClientSession, QueryFilter } from 'mongoose';
+import type { QueryFilter } from 'mongoose';
 import { DoctorModel } from '../models/Doctor';
 import { PatientModel, type Patient } from '../models/Patient';
 import { ApiError } from '../utils/ApiError';
 import { dateRangeFilter, pageMeta, paginate, parseSort, searchFilter } from '../utils/query';
-import { withTransaction } from '../utils/transaction';
 import type {
   CreateDoctorPatientInput,
   CreatePatientInput,
@@ -48,34 +47,26 @@ export async function getPatient(id: string) {
   return patient;
 }
 
-async function bumpPatientCount(doctorId: unknown, by: 1 | -1, session: ClientSession) {
-  await DoctorModel.updateOne({ _id: doctorId }, { $inc: { patientCount: by } }, { session });
+function bumpPatientCount(doctorId: unknown, by: 1 | -1) {
+  return DoctorModel.updateOne({ _id: doctorId }, { $inc: { patientCount: by } });
 }
 
-/**
- * Creates the patient and bumps the doctor's patientCount in one transaction,
- * so the denormalized counter can't drift if either write fails.
- * `doctorFromUrl` decides whether a missing doctor is a 404 (it's the resource
- * in the path) or a 400 (it's a bad field in the body).
- */
+const doctorNotFound = (fromUrl: boolean) =>
+  fromUrl
+    ? ApiError.notFound('Doctor not found')
+    : ApiError.badRequest('Invalid input', [{ path: 'doctor', message: 'Doctor not found' }]);
+
+// doctorFromUrl: 404 when doctor is the url resource, 400 when its a body field
 export async function createPatient(input: CreatePatientInput, { doctorFromUrl = false } = {}) {
   const { email, ...rest } = input;
-  const doc = { ...rest, ...(email ? { email } : {}) };
 
-  const id = await withTransaction(async (session) => {
-    const doctorExists = await DoctorModel.exists({ _id: input.doctor }).session(session);
-    if (!doctorExists) {
-      throw doctorFromUrl
-        ? ApiError.notFound('Doctor not found')
-        : ApiError.badRequest('Invalid input', [{ path: 'doctor', message: 'Doctor not found' }]);
-    }
+  if (!(await DoctorModel.exists({ _id: input.doctor }))) throw doctorNotFound(doctorFromUrl);
 
-    const [patient] = await PatientModel.create([doc], { session });
-    await bumpPatientCount(input.doctor, 1, session);
-    return patient._id;
-  });
+  // insert first, only count it once its actually saved
+  const patient = await PatientModel.create({ ...rest, ...(email ? { email } : {}) });
+  await bumpPatientCount(input.doctor, 1);
 
-  return getPatient(String(id));
+  return getPatient(String(patient._id));
 }
 
 export function createPatientForDoctor(doctorId: string, input: CreateDoctorPatientInput) {
@@ -89,37 +80,29 @@ export async function updatePatient(id: string, input: UpdatePatientInput) {
   if (Object.keys($set).length) update.$set = $set;
   if (email === '') update.$unset = { email: 1 };
 
-  await withTransaction(async (session) => {
-    const current = await PatientModel.findById(id).select('doctor').session(session).lean();
-    if (!current) throw ApiError.notFound('Patient not found');
+  if (input.doctor && !(await DoctorModel.exists({ _id: input.doctor }))) throw doctorNotFound(false);
 
-    const movingDoctor = input.doctor && String(current.doctor) !== input.doctor;
-    if (movingDoctor) {
-      const exists = await DoctorModel.exists({ _id: input.doctor }).session(session);
-      if (!exists) throw ApiError.badRequest('Invalid input', [{ path: 'doctor', message: 'Doctor not found' }]);
-    }
+  // returns the old doc so we know which doctor it was under before
+  const before = await PatientModel.findByIdAndUpdate(id, update, {
+    returnDocument: 'before',
+    runValidators: true,
+    projection: { doctor: 1 },
+  }).lean();
+  if (!before) throw ApiError.notFound('Patient not found');
 
-    await PatientModel.updateOne({ _id: id }, update, { session, runValidators: true });
-
-    if (movingDoctor) {
-      await bumpPatientCount(current.doctor, -1, session);
-      await bumpPatientCount(input.doctor, 1, session);
-    }
-  });
+  if (input.doctor && String(before.doctor) !== input.doctor) {
+    await Promise.all([bumpPatientCount(before.doctor, -1), bumpPatientCount(input.doctor, 1)]);
+  }
 
   return getPatient(id);
 }
 
-/** Deletes a patient. With `doctorId`, only if the patient belongs to that doctor. */
+// with doctorId it only deletes if the patient is under that doctor
 export async function deletePatient(id: string, doctorId?: string) {
-  await withTransaction(async (session) => {
-    const filter = doctorId ? { _id: id, doctor: doctorId } : { _id: id };
-    const deleted = await PatientModel.findOneAndDelete(filter, { session, projection: { doctor: 1 } }).lean();
-    if (!deleted) {
-      throw ApiError.notFound(doctorId ? 'Patient not found for this doctor' : 'Patient not found');
-    }
-    await bumpPatientCount(deleted.doctor, -1, session);
-  });
+  const filter = doctorId ? { _id: id, doctor: doctorId } : { _id: id };
+  const deleted = await PatientModel.findOneAndDelete(filter, { projection: { doctor: 1 } }).lean();
+  if (!deleted) throw ApiError.notFound(doctorId ? 'Patient not found for this doctor' : 'Patient not found');
+
+  await bumpPatientCount(deleted.doctor, -1);
   return { deleted: true };
 }
-
