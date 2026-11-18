@@ -1,6 +1,9 @@
 import express from 'express';
 import morgan from 'morgan';
 import cookieParser from 'cookie-parser';
+import cors from 'cors';
+import helmet from 'helmet';
+import compression from 'compression';
 import { env } from './config/env';
 import { connectDB, dbStatus } from './config/db';
 import { ensureDb } from './middleware/ensureDb';
@@ -10,6 +13,17 @@ import { errorHandler, notFound } from './middleware/errorHandler';
 const app = express();
 
 app.disable('x-powered-by');
+// behind Vercel's proxy: needed so rate limiting sees the real client IP
+app.set('trust proxy', 1);
+
+app.use(helmet());
+app.use(
+  cors({
+    origin: env.clientOrigins,
+    credentials: true,
+  }),
+);
+app.use(compression());
 app.use(express.json({ limit: '100kb' }));
 app.use(cookieParser());
 app.use(morgan(env.isProd ? 'combined' : 'dev'));
