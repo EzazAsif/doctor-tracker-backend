@@ -13,7 +13,7 @@ import { errorHandler, notFound } from './middleware/errorHandler';
 const app = express();
 
 app.disable('x-powered-by');
-// behind Vercel's proxy: needed so rate limiting sees the real client IP
+// behind vercel proxy, so rate limit sees real ip
 app.set('trust proxy', 1);
 
 app.use(helmet());
@@ -32,13 +32,12 @@ app.get('/api/health', async (_req, res) => {
   try {
     await connectDB();
   } catch {
-    // reported below as disconnected
+    // shows up as disconnected below
   }
   const db = dbStatus();
   res.status(db === 'connected' ? 200 : 503).json({ status: db === 'connected' ? 'ok' : 'degraded', db });
 });
 
-// every route registered after this point can assume the db is ready
 app.use('/api', ensureDb);
 app.use('/api', routes);
 

@@ -9,7 +9,7 @@ function readToken(cookieToken: unknown, header: string | undefined): string | n
   return null;
 }
 
-/** Accepts the httpOnly `token` cookie, or `Authorization: Bearer <jwt>` for API clients. */
+// cookie or Bearer header (for curl)
 export const requireAuth: RequestHandler = async (req, _res, next) => {
   const token = readToken(req.cookies?.token, req.headers.authorization);
   if (!token) return next(ApiError.unauthorized());
@@ -21,7 +21,7 @@ export const requireAuth: RequestHandler = async (req, _res, next) => {
     return next(ApiError.unauthorized('Session expired or invalid, please log in again'));
   }
 
-  // make sure the account still exists (cheap _id lookup)
+  // user might of been deleted since the token was issued
   const user = await findUserById(userId);
   if (!user) return next(ApiError.unauthorized('User no longer exists'));
 

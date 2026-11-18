@@ -34,7 +34,7 @@ function normalize(err: unknown): ApiError {
     ]);
   }
 
-  // body-parser: malformed JSON / payload too large
+  // bad json / body too big
   const httpErr = err as { type?: string; status?: number };
   if (httpErr?.type === 'entity.parse.failed') return ApiError.badRequest('Malformed JSON body');
   if (httpErr?.type === 'entity.too.large') return ApiError.badRequest('Request body is too large');

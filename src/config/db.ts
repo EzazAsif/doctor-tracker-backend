@@ -1,11 +1,7 @@
 import mongoose from 'mongoose';
 import { env } from './env';
 
-/**
- * Serverless functions can be re-used between invocations, so we keep the
- * connection promise on globalThis. Warm invocations then skip the handshake
- * and concurrent cold requests share a single connect() call.
- */
+// cache conn on globalThis so serverles doesnt reconnect every request
 type Cache = { conn: typeof mongoose | null; promise: Promise<typeof mongoose> | null };
 
 const globalForMongo = globalThis as unknown as { _mongo?: Cache };
@@ -25,7 +21,7 @@ export async function connectDB(): Promise<typeof mongoose> {
         autoIndex: !env.isProd,
       })
       .catch((err) => {
-        // let the next request retry instead of caching a failed promise
+        // dont cache a failed connect, next request retries
         cache.promise = null;
         throw err;
       });

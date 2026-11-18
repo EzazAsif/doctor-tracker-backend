@@ -1,8 +1,7 @@
 import app from './app';
 import { env } from './config/env';
 
-// On Vercel the exported app is used as the request handler,
-// so we only bind a port when running it ourselves.
+// vercel uses the exported app, only listen locally
 if (!process.env.VERCEL) {
   const server = app.listen(env.PORT, () => {
     console.log(`API listening on http://localhost:${env.PORT}`);
