@@ -66,8 +66,10 @@ const FEMALE_FIRST = [
 ];
 const LAST = [
   'Rahman', 'Hossain', 'Ahmed', 'Islam', 'Chowdhury', 'Khan', 'Uddin', 'Alam', 'Sarkar', 'Talukder',
-  'Haque', 'Karim', 'Siddiqui', 'Mia', 'Bhuiyan', 'Das', 'Roy', 'Akter', 'Begum', 'Majumder',
+  'Haque', 'Karim', 'Siddiqui', 'Mia', 'Bhuiyan', 'Das', 'Roy', 'Majumder',
 ];
+// used as surnames by women only
+const FEMALE_LAST = ['Akter', 'Begum', 'Khatun'];
 
 const NOTES: Record<Condition, string[]> = {
   Hypertension: [
@@ -140,7 +142,8 @@ function uniqueEmail(local: string, domain: string) {
 }
 
 function personName(gender: 'male' | 'female') {
-  return { first: pick(gender === 'male' ? MALE_FIRST : FEMALE_FIRST), last: pick(LAST) };
+  if (gender === 'male') return { first: pick(MALE_FIRST), last: pick(LAST) };
+  return { first: pick(FEMALE_FIRST), last: chance(0.25) ? pick(FEMALE_LAST) : pick(LAST) };
 }
 
 function statusFor(admittedAt: number): Status {
@@ -191,8 +194,13 @@ async function seed() {
   const doctors = await DoctorModel.insertMany(doctorDocs);
   console.log(`Inserted ${doctors.length} doctors`);
 
-  // ~600 patients; some doctors are much busier than others
-  const weights = doctors.map(() => 0.3 + rand() * 1.7);
+  // ~600 patients; some doctors are busier than others, and a doctor who joined
+  // last month shouldn't have as many patients as one who has been here a year
+  const fourteenMonths = now - monthsAgo(14);
+  const weights = doctors.map((d) => {
+    const tenure = Math.min(1, (now - d.createdAt.getTime()) / fourteenMonths);
+    return (0.3 + rand() * 1.7) * Math.max(0.05, tenure);
+  });
   const totalWeight = weights.reduce((a, b) => a + b, 0);
   const specByName = new Map(SPECIALIZATIONS.map((s) => [s.name, s]));
 
