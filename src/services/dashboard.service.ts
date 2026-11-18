@@ -6,7 +6,7 @@ type MonthCount = { period: string; count: number };
 const startOfMonthUTC = (d: Date) => new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), 1));
 const monthKey = (d: Date) => `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}`;
 
-/** Every YYYY-MM between from and to, so charts get a 0 instead of a gap. */
+// fill empty months with 0
 function fillMonths(from: Date, to: Date, rows: MonthCount[]): MonthCount[] {
   const counts = new Map(rows.map((r) => [r.period, r.count]));
   const out: MonthCount[] = [];
@@ -17,7 +17,7 @@ function fillMonths(from: Date, to: Date, rows: MonthCount[]): MonthCount[] {
   return out;
 }
 
-/** Default range: the current month plus the 11 before it. */
+// default: last 12 months incl. this one
 export function resolveRange(from?: string, to?: string) {
   const now = new Date();
   const end = to ? new Date(`${to}T23:59:59.999Z`) : now;
@@ -37,12 +37,11 @@ export async function getStats(from?: string, to?: string) {
   const monthStart = startOfMonthUTC(new Date());
 
   const [totalPatients, totalDoctors, newPatientsThisMonth, [patientFacets], [doctorFacets]] = await Promise.all([
-    // collection metadata, no scan
     PatientModel.estimatedDocumentCount(),
     DoctorModel.estimatedDocumentCount(),
     PatientModel.countDocuments({ admissionDate: { $gte: monthStart } }),
 
-    // one pass over the in-range patients; the $match uses the admissionDate index
+    // $match first so it can use the admissionDate index
     PatientModel.aggregate<{
       inRange: { count: number }[];
       overTime: MonthCount[];
@@ -88,7 +87,7 @@ export async function getStats(from?: string, to?: string) {
       {
         $facet: {
           overTime: [{ $match: { createdAt: { $gte: start, $lte: end } } }, ...byMonth('createdAt')],
-          // patientCount is already denormalized, so no join is needed here
+          // no join needed, patientCount is on the doctor
           specializations: [
             { $group: { _id: '$specialization', doctors: { $sum: 1 }, patients: { $sum: '$patientCount' } } },
             { $sort: { patients: -1, _id: 1 } },
@@ -99,7 +98,7 @@ export async function getStats(from?: string, to?: string) {
     ]),
   ]);
 
-  // names for the top 10 only - a 10 document _id lookup
+  // only need names for the top 10
   const topIds = patientFacets.perDoctor.map((p) => p.doctorId);
   const topDoctors = await DoctorModel.find({ _id: { $in: topIds } }).select('name specialization').lean();
   const doctorById = new Map(topDoctors.map((d) => [String(d._id), d]));

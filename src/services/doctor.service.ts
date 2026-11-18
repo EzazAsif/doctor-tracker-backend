@@ -4,7 +4,6 @@ import { ApiError } from '../utils/ApiError';
 import { dateRangeFilter, pageMeta, paginate, parseSort, searchFilter } from '../utils/query';
 import type { CreateDoctorInput, ListDoctorsQuery, UpdateDoctorInput } from '../validators/doctor.validator';
 
-// fields returned in list/detail responses - keeps payloads small and predictable
 const DOCTOR_FIELDS = 'name specialization hospital phone email patientCount createdAt updatedAt';
 const SEARCH_FIELDS = ['name', 'specialization', 'hospital', 'email'];
 
@@ -17,7 +16,7 @@ export async function listDoctors(q: ListDoctorsQuery) {
   };
   const { skip, limit } = paginate(q.page, q.limit);
 
-  // page + total in parallel: one round trip's worth of latency instead of two
+  // page and count in parallel
   const [data, total] = await Promise.all([
     DoctorModel.find(filter).select(DOCTOR_FIELDS).sort(parseSort(q.sort)).skip(skip).limit(limit).lean(),
     DoctorModel.countDocuments(filter),
@@ -67,7 +66,7 @@ export async function updateDoctor(id: string, input: UpdateDoctorInput) {
   return doctor;
 }
 
-// patients first, then the doctor. if it fails halfway the doctor is still there and delete can be retried
+// patients first, so if it dies halfway the doctor is still there and you can retry
 export async function deleteDoctor(doctorId: string) {
   await assertDoctorExists(doctorId);
   const { deletedCount } = await PatientModel.deleteMany({ doctor: doctorId });
@@ -75,7 +74,7 @@ export async function deleteDoctor(doctorId: string) {
   return { deleted: true, patientsDeleted: deletedCount };
 }
 
-// rebuilds every patientCount from the patients collection. used by seed and `npm run recount`
+// rebuild patientCount from scratch (seed + npm run recount)
 export async function recountPatientCounts() {
   const counts = await PatientModel.aggregate<{ _id: unknown; n: number }>([
     { $group: { _id: '$doctor', n: { $sum: 1 } } },

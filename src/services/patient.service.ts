@@ -32,7 +32,6 @@ export async function listPatients(q: ListPatientsQuery) {
       .sort(parseSort(q.sort))
       .skip(skip)
       .limit(limit)
-      // one extra query with $in over just this page's doctor ids
       .populate(DOCTOR_SUMMARY)
       .lean(),
     PatientModel.countDocuments(filter),
@@ -56,7 +55,7 @@ const doctorNotFound = (fromUrl: boolean) =>
     ? ApiError.notFound('Doctor not found')
     : ApiError.badRequest('Invalid input', [{ path: 'doctor', message: 'Doctor not found' }]);
 
-// doctorFromUrl: 404 when doctor is the url resource, 400 when its a body field
+// doctorFromUrl -> 404, doctor in body -> 400
 export async function createPatient(input: CreatePatientInput, { doctorFromUrl = false } = {}) {
   const { email, ...rest } = input;
 
@@ -82,7 +81,7 @@ export async function updatePatient(id: string, input: UpdatePatientInput) {
 
   if (input.doctor && !(await DoctorModel.exists({ _id: input.doctor }))) throw doctorNotFound(false);
 
-  // returns the old doc so we know which doctor it was under before
+  // old doc, need the previous doctor
   const before = await PatientModel.findByIdAndUpdate(id, update, {
     returnDocument: 'before',
     runValidators: true,
@@ -97,7 +96,6 @@ export async function updatePatient(id: string, input: UpdatePatientInput) {
   return getPatient(id);
 }
 
-// with doctorId it only deletes if the patient is under that doctor
 export async function deletePatient(id: string, doctorId?: string) {
   const filter = doctorId ? { _id: id, doctor: doctorId } : { _id: id };
   const deleted = await PatientModel.findOneAndDelete(filter, { projection: { doctor: 1 } }).lean();

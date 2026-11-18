@@ -4,7 +4,7 @@ import { ApiError } from '../utils/ApiError';
 import { signToken, verifyToken } from '../utils/jwt';
 import type { AuthUser } from '../types/express';
 
-// compared against when the email doesn't exist so both paths take ~the same time
+// used when email doesnt exist so timing is the same
 const DUMMY_HASH = '$2b$10$SUYfb7fU.r7SXzPCWBTWRuB4iA18pDUg3PUokBF/1OAE8B.NdQVa6';
 
 export async function login(email: string, password: string) {

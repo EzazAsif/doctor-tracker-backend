@@ -1,17 +1,13 @@
-/** Escape user input before using it inside a RegExp (prevents regex injection / ReDoS). */
+// escape user input before putting it in a regex
 export const escapeRegex = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
-/** Case-insensitive "contains" match across several fields. */
 export function searchFilter(search: string | undefined, fields: string[]) {
   if (!search) return {};
   const rx = new RegExp(escapeRegex(search), 'i');
   return { $or: fields.map((f) => ({ [f]: rx })) };
 }
 
-/**
- * from/to are inclusive calendar days (UTC). `to` is pushed to the very end
- * of that day so a record created at 18:00 on the `to` date is included.
- */
+// to is inclusive, so push it to end of day (UTC)
 export function dateRangeFilter(field: string, from?: string, to?: string) {
   if (!from && !to) return {};
   const range: { $gte?: Date; $lte?: Date } = {};
@@ -28,7 +24,7 @@ export function pageMeta(page: number, limit: number, total: number) {
   return { page, limit, total, totalPages: Math.max(1, Math.ceil(total / limit)) };
 }
 
-/** "-createdAt" -> { createdAt: -1, _id: -1 }. _id breaks ties so pages are stable. */
+// _id as tie breaker so paging is stable
 export function parseSort(sort: string): Record<string, 1 | -1> {
   const desc = sort.startsWith('-');
   const field = desc ? sort.slice(1) : sort;
