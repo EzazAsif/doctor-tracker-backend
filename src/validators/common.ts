@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-// "Required" reads better in a form than "expected string, received undefined"
+// nicer msg than zods default for missing fields
 z.config({
   customError: (issue) => (issue.code === 'invalid_type' && issue.input === undefined ? 'Required' : undefined),
 });

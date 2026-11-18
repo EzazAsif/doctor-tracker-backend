@@ -36,10 +36,9 @@ export async function remove(req: Request<IdParams>, res: Response) {
   res.json({ data: await doctorService.deleteDoctor(req.params.id) });
 }
 
-// ---- patients scoped to a doctor ----
+// patients under a doctor
 
 export async function listPatients(req: Request<IdParams>, res: Response) {
-  // 404 for an unknown doctor rather than an empty page
   await doctorService.assertDoctorExists(req.params.id);
   const query = req.query as unknown as ListDoctorPatientsQuery;
   res.json(await patientService.listPatients({ ...query, doctor: req.params.id }));

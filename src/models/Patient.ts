@@ -31,12 +31,11 @@ const patientSchema = new Schema(
   { timestamps: true, toJSON: { versionKey: false } },
 );
 
-// a doctor's patient list, newest admission first (also used by $inc / cascade delete)
+// doctor's patients tab + cascade delete
 patientSchema.index({ doctor: 1, admissionDate: -1 });
-// condition filter + default sort
 patientSchema.index({ condition: 1, admissionDate: -1 });
 patientSchema.index({ status: 1 });
-// default sort, date range filter and the dashboard's monthly grouping
+// default sort, date range, dashboard
 patientSchema.index({ admissionDate: -1 });
 patientSchema.index({ name: 1 });
 

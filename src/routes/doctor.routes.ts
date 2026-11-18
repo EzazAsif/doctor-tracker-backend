@@ -12,7 +12,7 @@ import { createDoctorPatientSchema, listDoctorPatientsQuery } from '../validator
 
 const router = Router();
 
-// static paths first so "/options" isn't treated as an :id
+// keep these above /:id
 router.get('/', validate({ query: listDoctorsQuery }), asyncHandler(doctors.list));
 router.get('/options', asyncHandler(doctors.options));
 router.get('/lookup', validate({ query: lookupDoctorsQuery }), asyncHandler(doctors.lookup));

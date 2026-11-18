@@ -9,7 +9,7 @@ const router = Router();
 
 router.use('/auth', authRoutes);
 
-// everything below needs a logged-in admin
+// rest needs login
 router.use('/doctors', requireAuth, doctorRoutes);
 router.use('/patients', requireAuth, patientRoutes);
 router.use('/dashboard', requireAuth, dashboardRoutes);

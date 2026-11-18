@@ -7,22 +7,21 @@ const patientFields = {
   age: z.coerce.number().int('Age must be a whole number').min(0).max(120),
   gender: z.enum(GENDERS),
   phone,
-  // forms send "" for an empty optional field; on update it clears the email
+  // "" = no email (clears it on update)
   email: z.union([z.literal(''), email]).optional(),
   condition: z.enum(CONDITIONS),
   status: z.enum(STATUSES).default('admitted'),
   admissionDate: z.coerce
     .date()
-    // a day of slack for timezones
+    // 1 day slack for timezones
     .refine((d) => d.getTime() <= Date.now() + 24 * 60 * 60 * 1000, 'Admission date cannot be in the future')
     .optional(),
   notes: z.string().trim().max(500).optional(),
 };
 
-// POST /api/doctors/:id/patients - the doctor comes from the URL
+// doctor comes from the url here
 export const createDoctorPatientSchema = z.object(patientFields);
 
-// POST /api/patients
 export const createPatientSchema = createDoctorPatientSchema.extend({ doctor: objectId });
 
 export const updatePatientSchema = z

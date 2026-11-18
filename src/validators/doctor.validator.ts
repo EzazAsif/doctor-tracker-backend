@@ -11,7 +11,7 @@ export const createDoctorSchema = z.object({
   email,
 });
 
-// patientCount is intentionally not accepted - zod strips unknown keys
+// no patientCount here on purpose
 export const updateDoctorSchema = createDoctorSchema
   .partial()
   .refine((body) => Object.keys(body).length > 0, { message: 'Provide at least one field to update' });
