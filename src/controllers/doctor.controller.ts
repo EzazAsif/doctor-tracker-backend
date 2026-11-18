@@ -1,6 +1,8 @@
 import type { Request, Response } from 'express';
 import * as doctorService from '../services/doctor.service';
+import * as patientService from '../services/patient.service';
 import type { CreateDoctorInput, ListDoctorsQuery, UpdateDoctorInput } from '../validators/doctor.validator';
+import type { CreateDoctorPatientInput, ListDoctorPatientsQuery } from '../validators/patient.validator';
 
 type IdParams = { id: string };
 
@@ -28,4 +30,26 @@ export async function create(req: Request, res: Response) {
 
 export async function update(req: Request<IdParams>, res: Response) {
   res.json({ data: await doctorService.updateDoctor(req.params.id, req.body as UpdateDoctorInput) });
+}
+
+export async function remove(req: Request<IdParams>, res: Response) {
+  res.json({ data: await doctorService.deleteDoctor(req.params.id) });
+}
+
+// ---- patients scoped to a doctor ----
+
+export async function listPatients(req: Request<IdParams>, res: Response) {
+  // 404 for an unknown doctor rather than an empty page
+  await doctorService.assertDoctorExists(req.params.id);
+  const query = req.query as unknown as ListDoctorPatientsQuery;
+  res.json(await patientService.listPatients({ ...query, doctor: req.params.id }));
+}
+
+export async function addPatient(req: Request<IdParams>, res: Response) {
+  const patient = await patientService.createPatientForDoctor(req.params.id, req.body as CreateDoctorPatientInput);
+  res.status(201).json({ data: patient });
+}
+
+export async function removePatient(req: Request<IdParams & { patientId: string }>, res: Response) {
+  res.json({ data: await patientService.deletePatient(req.params.patientId, req.params.id) });
 }

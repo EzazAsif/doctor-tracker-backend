@@ -57,3 +57,4 @@ export type CreatePatientInput = z.infer<typeof createPatientSchema>;
 export type CreateDoctorPatientInput = z.infer<typeof createDoctorPatientSchema>;
 export type UpdatePatientInput = z.infer<typeof updatePatientSchema>;
 export type ListPatientsQuery = z.infer<typeof listPatientsQuery>;
+export type ListDoctorPatientsQuery = z.infer<typeof listDoctorPatientsQuery>;

@@ -1,5 +1,7 @@
 import { DoctorModel } from '../models/Doctor';
+import { PatientModel } from '../models/Patient';
 import { ApiError } from '../utils/ApiError';
+import { withTransaction } from '../utils/transaction';
 import { dateRangeFilter, pageMeta, paginate, parseSort, searchFilter } from '../utils/query';
 import type { CreateDoctorInput, ListDoctorsQuery, UpdateDoctorInput } from '../validators/doctor.validator';
 
@@ -64,4 +66,14 @@ export async function updateDoctor(id: string, input: UpdateDoctorInput) {
     .lean();
   if (!doctor) throw ApiError.notFound('Doctor not found');
   return doctor;
+}
+
+/** Cascade: removes the doctor and all of their patients atomically. */
+export async function deleteDoctor(doctorId: string) {
+  return withTransaction(async (session) => {
+    const doctor = await DoctorModel.findByIdAndDelete(doctorId, { session }).select('_id').lean();
+    if (!doctor) throw ApiError.notFound('Doctor not found');
+    const { deletedCount } = await PatientModel.deleteMany({ doctor: doctorId }, { session });
+    return { deleted: true, patientsDeleted: deletedCount };
+  });
 }

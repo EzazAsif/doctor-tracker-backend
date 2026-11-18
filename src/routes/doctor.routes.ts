@@ -8,6 +8,7 @@ import {
   lookupDoctorsQuery,
   updateDoctorSchema,
 } from '../validators/doctor.validator';
+import { createDoctorPatientSchema, listDoctorPatientsQuery } from '../validators/patient.validator';
 
 const router = Router();
 
@@ -19,5 +20,20 @@ router.post('/', validate({ body: createDoctorSchema }), asyncHandler(doctors.cr
 
 router.get('/:id', validateObjectId('id'), asyncHandler(doctors.getOne));
 router.patch('/:id', validateObjectId('id'), validate({ body: updateDoctorSchema }), asyncHandler(doctors.update));
+router.delete('/:id', validateObjectId('id'), asyncHandler(doctors.remove));
+
+router.get(
+  '/:id/patients',
+  validateObjectId('id'),
+  validate({ query: listDoctorPatientsQuery }),
+  asyncHandler(doctors.listPatients),
+);
+router.post(
+  '/:id/patients',
+  validateObjectId('id'),
+  validate({ body: createDoctorPatientSchema }),
+  asyncHandler(doctors.addPatient),
+);
+router.delete('/:id/patients/:patientId', validateObjectId('id', 'patientId'), asyncHandler(doctors.removePatient));
 
 export default router;
