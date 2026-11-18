@@ -1,12 +1,5 @@
-/**
- * Resets the database with demo data:
- *   - the demo admin (admin@doctortracker.com / Admin@12345)
- *   - ~50 doctors across 10 specializations and 8 hospitals
- *   - ~600 patients admitted over the last 14 months
- *
- * Usage: npm run seed
- * Uses a fixed random seed so every run produces the same data set.
- */
+// npm run seed - WIPES users/doctors/patients and inserts demo data
+// fixed random seed so its the same data every run
 import bcrypt from 'bcryptjs';
 import mongoose from 'mongoose';
 import { connectDB } from '../config/db';
@@ -16,7 +9,7 @@ import { DoctorModel } from '../models/Doctor';
 import { recountPatientCounts } from '../services/doctor.service';
 import { PatientModel, type CONDITIONS, type STATUSES } from '../models/Patient';
 
-// ---------- tiny deterministic PRNG (mulberry32) ----------
+// mulberry32
 let state = 20261120;
 function rand() {
   state |= 0;
@@ -29,7 +22,6 @@ const int = (min: number, max: number) => Math.floor(rand() * (max - min + 1)) +
 const pick = <T>(arr: readonly T[]): T => arr[Math.floor(rand() * arr.length)];
 const chance = (p: number) => rand() < p;
 
-// ---------- reference data ----------
 type Condition = (typeof CONDITIONS)[number];
 type Status = (typeof STATUSES)[number];
 
@@ -124,7 +116,6 @@ const NOTES: Record<Condition, string[]> = {
   ],
 };
 
-// ---------- helpers ----------
 const DAY = 24 * 60 * 60 * 1000;
 const now = Date.now();
 const monthsAgo = (m: number) => now - m * 30 * DAY;
@@ -154,7 +145,6 @@ function statusFor(admittedAt: number): Status {
   return pick(['under_treatment', 'recovered', 'recovered', 'discharged', 'discharged']);
 }
 
-// ---------- seed ----------
 async function seed() {
   if (env.isProd && !process.argv.includes('--force')) {
     throw new Error('Refusing to seed with NODE_ENV=production (pass --force to override)');
@@ -173,13 +163,13 @@ async function seed() {
     role: 'admin',
   });
 
-  // 50 doctors: 5 per specialization, spread over 8 hospitals, joined over the last 14 months
+  // 5 doctors per specialization
   const doctorDocs = SPECIALIZATIONS.flatMap((spec) =>
     Array.from({ length: 5 }, () => {
       const gender = chance(0.45) ? 'female' : 'male';
       const { first, last } = personName(gender);
       const hospital = pick(HOSPITALS);
-      // most doctors were onboarded early, a few joined recently
+      // most joined early, a few recently
       const createdAt = new Date(chance(0.7) ? monthsAgo(int(11, 14)) - int(0, 20) * DAY : monthsAgo(int(0, 10)) - int(0, 25) * DAY);
       return {
         name: `Dr. ${first} ${last}`,
@@ -195,8 +185,7 @@ async function seed() {
   const doctors = await DoctorModel.insertMany(doctorDocs);
   console.log(`Inserted ${doctors.length} doctors`);
 
-  // ~600 patients; some doctors are busier than others, and a doctor who joined
-  // last month shouldn't have as many patients as one who has been here a year
+  // ~600 patients. newer doctors get less so the numbers look real
   const fourteenMonths = now - monthsAgo(14);
   const weights = doctors.map((d) => {
     const tenure = Math.min(1, (now - d.createdAt.getTime()) / fourteenMonths);
