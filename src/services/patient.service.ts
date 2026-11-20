@@ -1,4 +1,5 @@
 import type { QueryFilter } from 'mongoose';
+import { importPatientSchema } from '../validators/patient.validator';
 import { DoctorModel } from '../models/Doctor';
 import { PatientModel, type Patient } from '../models/Patient';
 import { ApiError } from '../utils/ApiError';
@@ -9,6 +10,7 @@ import type {
   ListPatientsQuery,
   UpdatePatientInput,
 } from '../validators/patient.validator';
+import { importErrorMessage } from './import-error';
 
 const PATIENT_FIELDS =
   'name age gender phone email condition status admissionDate notes doctor createdAt updatedAt';
@@ -70,6 +72,37 @@ export async function createPatient(input: CreatePatientInput, { doctorFromUrl =
 
 export function createPatientForDoctor(doctorId: string, input: CreateDoctorPatientInput) {
   return createPatient({ ...input, doctor: doctorId }, { doctorFromUrl: true });
+}
+
+export async function importPatients(rows: unknown[]) {
+  let imported = 0;
+  const errors: { row: number; message: string }[] = [];
+
+  for (const [index, row] of rows.entries()) {
+    const parsed = importPatientSchema.safeParse(row);
+    if (!parsed.success) {
+      errors.push({ row: index + 2, message: parsed.error.issues.map((issue) => issue.message).join('; ') });
+      continue;
+    }
+
+    const { doctorEmail, ...patient } = parsed.data;
+    const doctor = await DoctorModel.findOne({ email: doctorEmail }).select('_id').lean();
+    if (!doctor) {
+      errors.push({ row: index + 2, message: `No doctor found for ${doctorEmail}` });
+      continue;
+    }
+
+    try {
+      await createPatient({ ...patient, doctor: String(doctor._id) });
+      imported += 1;
+    } catch (error) {
+      const message = importErrorMessage(error);
+      if (!message) throw error;
+      errors.push({ row: index + 2, message });
+    }
+  }
+
+  return { total: rows.length, imported, errors };
 }
 
 export async function updatePatient(id: string, input: UpdatePatientInput) {

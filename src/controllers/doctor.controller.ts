@@ -28,6 +28,10 @@ export async function create(req: Request, res: Response) {
   res.status(201).json({ data: doctor });
 }
 
+export async function importMany(req: Request, res: Response) {
+  res.json({ data: await doctorService.importDoctors((req.body as { rows: unknown[] }).rows) });
+}
+
 export async function update(req: Request<IdParams>, res: Response) {
   res.json({ data: await doctorService.updateDoctor(req.params.id, req.body as UpdateDoctorInput) });
 }

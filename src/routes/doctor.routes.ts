@@ -9,6 +9,7 @@ import {
   updateDoctorSchema,
 } from '../validators/doctor.validator';
 import { createDoctorPatientSchema, listDoctorPatientsQuery } from '../validators/patient.validator';
+import { importRowsSchema } from '../validators/common';
 
 const router = Router();
 
@@ -17,6 +18,7 @@ router.get('/', validate({ query: listDoctorsQuery }), asyncHandler(doctors.list
 router.get('/options', asyncHandler(doctors.options));
 router.get('/lookup', validate({ query: lookupDoctorsQuery }), asyncHandler(doctors.lookup));
 router.post('/', validate({ body: createDoctorSchema }), asyncHandler(doctors.create));
+router.post('/import', validate({ body: importRowsSchema }), asyncHandler(doctors.importMany));
 
 router.get('/:id', validateObjectId('id'), asyncHandler(doctors.getOne));
 router.patch('/:id', validateObjectId('id'), validate({ body: updateDoctorSchema }), asyncHandler(doctors.update));

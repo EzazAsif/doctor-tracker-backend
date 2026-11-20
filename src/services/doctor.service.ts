@@ -2,7 +2,8 @@ import { DoctorModel } from '../models/Doctor';
 import { PatientModel } from '../models/Patient';
 import { ApiError } from '../utils/ApiError';
 import { dateRangeFilter, pageMeta, paginate, parseSort, searchFilter } from '../utils/query';
-import type { CreateDoctorInput, ListDoctorsQuery, UpdateDoctorInput } from '../validators/doctor.validator';
+import { createDoctorSchema, type CreateDoctorInput, type ListDoctorsQuery, type UpdateDoctorInput } from '../validators/doctor.validator';
+import { importErrorMessage } from './import-error';
 
 const DOCTOR_FIELDS = 'name specialization hospital phone email patientCount createdAt updatedAt';
 const SEARCH_FIELDS = ['name', 'specialization', 'hospital', 'email'];
@@ -56,6 +57,30 @@ export async function assertDoctorExists(id: string) {
 export async function createDoctor(input: CreateDoctorInput) {
   const doctor = await DoctorModel.create(input);
   return doctor.toJSON();
+}
+
+export async function importDoctors(rows: unknown[]) {
+  let imported = 0;
+  const errors: { row: number; message: string }[] = [];
+
+  for (const [index, row] of rows.entries()) {
+    const parsed = createDoctorSchema.safeParse(row);
+    if (!parsed.success) {
+      errors.push({ row: index + 2, message: parsed.error.issues.map((issue) => issue.message).join('; ') });
+      continue;
+    }
+
+    try {
+      await DoctorModel.create(parsed.data);
+      imported += 1;
+    } catch (error) {
+      const message = importErrorMessage(error);
+      if (!message) throw error;
+      errors.push({ row: index + 2, message });
+    }
+  }
+
+  return { total: rows.length, imported, errors };
 }
 
 export async function updateDoctor(id: string, input: UpdateDoctorInput) {

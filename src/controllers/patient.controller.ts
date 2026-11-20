@@ -17,6 +17,10 @@ export async function create(req: Request, res: Response) {
   res.status(201).json({ data: patient });
 }
 
+export async function importMany(req: Request, res: Response) {
+  res.json({ data: await patientService.importPatients((req.body as { rows: unknown[] }).rows) });
+}
+
 export async function update(req: Request<IdParams>, res: Response) {
   res.json({ data: await patientService.updatePatient(req.params.id, req.body as UpdatePatientInput) });
 }

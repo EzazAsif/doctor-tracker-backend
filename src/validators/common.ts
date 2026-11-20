@@ -33,3 +33,5 @@ export const dateRangeQuery = z
 export const searchQuery = z.object({
   search: z.string().trim().max(100).optional(),
 });
+
+export const importRowsSchema = z.object({ rows: z.array(z.unknown()).min(1).max(100) });

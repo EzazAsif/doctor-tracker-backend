@@ -24,6 +24,8 @@ export const createDoctorPatientSchema = z.object(patientFields);
 
 export const createPatientSchema = createDoctorPatientSchema.extend({ doctor: objectId });
 
+export const importPatientSchema = createDoctorPatientSchema.extend({ doctorEmail: email });
+
 export const updatePatientSchema = z
   .object({ ...patientFields, status: z.enum(STATUSES), doctor: objectId })
   .partial()
