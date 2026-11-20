@@ -35,3 +35,10 @@ export const requireRole =
     if (!req.user || !roles.includes(req.user.role)) return next(ApiError.forbidden());
     next();
   };
+
+export const requireDoctorLink: RequestHandler = (req, _res, next) => {
+  if (req.user?.role === 'doctor' && !req.user.doctor) {
+    return next(ApiError.forbidden('This doctor account is not linked to a doctor record'));
+  }
+  next();
+};

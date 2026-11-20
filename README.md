@@ -1,6 +1,6 @@
 # Doctor Tracker — API
 
-Doctor Tracker is an admin portal for keeping track of doctors and the patients under their care. This repository is the REST API behind it. It is built with Express 5, TypeScript and MongoDB (Mongoose). An admin logs in and can then manage doctors and patients, move a patient to a different doctor, and look at dashboard stats such as patients per doctor, monthly admissions, and condition and status breakdowns. The API was built for real list screens: every list is searchable, filterable, sortable and paginated, and each one is backed by an index chosen for that query.
+Doctor Tracker is a clinic admin portal for managing doctors, staff accounts, and patients. This repository is the REST API behind it, built with Express 5, TypeScript and MongoDB (Mongoose). Admins manage all records and staff; doctor accounts can manage only their own patients. The API also records a privacy-conscious activity history and provides paginated, searchable, filterable lists.
 
 Frontend: [doctor-tracker-frontend](https://github.com/EzazAsif/doctor-tracker-frontend) (Next.js)
 
@@ -46,7 +46,7 @@ Requirements: Node 20+ and a MongoDB database. A free Atlas cluster works fine.
    ```bash
    npm run seed
    ```
-   > This **clears** the users, doctors and patients collections first.
+   > This **clears** the activity, users, doctors and patients collections first.
 4. **Run it**
    ```bash
    npm run dev        # watch mode on http://localhost:5000
@@ -69,7 +69,7 @@ The browser never calls this API directly. The Next.js app rewrites `/api/*` to 
 ```
 src/
   config/       env (zod-validated), cached Mongo connection
-  models/       User, Doctor, Patient + their indexes
+  models/       User, Doctor, Patient, Activity + their indexes
   validators/   zod schemas for bodies and query strings
   middleware/   auth, validate, objectId check, rate limit, ensureDb, errors
   routes/       routers, wired together in routes/index.ts
@@ -87,7 +87,7 @@ Requests flow route → validation → controller → service → model. Every e
 
 ### Endpoints
 
-All routes are under `/api`. Everything except `login` and `health` requires auth, sent either as the `token` cookie or as `Authorization: Bearer <jwt>`.
+All routes are under `/api`. Everything except `login` and `health` requires auth, sent either as the `token` cookie or as `Authorization: Bearer <jwt>`. Admins can use all routes. Doctor accounts can use patient routes only, and the API scopes every patient query and mutation to the doctor linked to that account.
 
 | Method | Path | Description |
 |---|---|---|
@@ -95,6 +95,9 @@ All routes are under `/api`. Everything except `login` and `health` requires aut
 | POST | `/auth/login` | Sets the httpOnly `token` cookie. Rate limited to 10 failed attempts per 15 min per IP |
 | POST | `/auth/logout` | Clears the cookie |
 | GET | `/auth/me` | Current user |
+| GET / POST | `/users` | Admin only: list accounts or create an admin/doctor account. Doctor account email must match an existing doctor record |
+| PATCH | `/users/:id` | Admin only: activate or deactivate an account; the final active admin and the signed-in account cannot be deactivated |
+| GET | `/activity` | Admin only: paginated activity events, newest first |
 | GET | `/doctors` | `search`, `specialization`, `hospital`, `from`, `to`, `sort`, `page`, `limit` |
 | GET | `/doctors/options` | Distinct specializations and hospitals for the filter dropdowns |
 | GET | `/doctors/lookup?search=` | Up to 20 `{ _id, name, specialization }` for doctor pickers |
@@ -103,9 +106,9 @@ All routes are under `/api`. Everything except `login` and `health` requires aut
 | GET | `/doctors/:id/patients` | A doctor's patients: `search`, `condition`, `status`, `from`, `to` |
 | POST | `/doctors/:id/patients` | Add a patient to this doctor |
 | DELETE | `/doctors/:id/patients/:patientId` | 404 if the patient isn't this doctor's |
-| GET | `/patients` | `search`, `condition`, `status`, `gender`, `doctor`, `from`, `to`, `sort`, `page`, `limit` |
-| POST | `/patients` | Create a patient (`doctor` in the body) |
-| GET / PATCH / DELETE | `/patients/:id` | PATCH may change `doctor`, which moves the patient |
+| GET | `/patients` | Admin: `search`, `condition`, `status`, `gender`, `doctor`, `from`, `to`, `sort`, `page`, `limit`; doctors always receive their own patients |
+| POST | `/patients` | Admin creates with a `doctor`; doctors create under their linked doctor record |
+| GET / PATCH / DELETE | `/patients/:id` | Admin may move a patient; doctors can change only records assigned to them |
 | GET | `/dashboard/stats?from=&to=` | Totals and breakdowns. Defaults to the last 12 months |
 
 Lists return `{ data: [...], meta: { page, limit, total, totalPages } }`. `from` and `to` are inclusive `YYYY-MM-DD` dates (UTC), and `to` covers the whole day.
@@ -153,6 +156,8 @@ Each index matches a query the UI actually runs, following the **equality → so
 | patients | `{ admissionDate: -1 }` | Default sort, date range, and the dashboard's `$match` |
 | patients | `{ status: 1 }`, `{ name: 1 }` | Status filter, A–Z sort |
 | users | `{ email: 1 }` unique | Login |
+| users | `{ doctor: 1 }` unique when linked | One login per doctor record |
+| activity | `{ createdAt: -1, _id: -1 }` | Newest-first history |
 
 Other choices on the query side:
 
@@ -165,7 +170,9 @@ Other choices on the query side:
 
 ### Other notes
 
-- **Auth.** The JWT (HS256) lives in an `httpOnly`, `SameSite=Lax` cookie that is `Secure` in production, so page JavaScript can't read it. The cookie expiry matches the token's `exp`. The middleware also checks that the user still exists. Login compares against a dummy hash when the email is unknown, so response time doesn't reveal which emails are registered.
+- **Auth and roles.** The JWT (HS256) lives in an `httpOnly`, `SameSite=Lax` cookie that is `Secure` in production. Each request reloads the active user and role from MongoDB, so deactivation takes effect without waiting for token expiry. Admin-only routes are enforced in the API; doctor patient queries are scoped by the linked doctor ID. Login compares against a dummy hash when the email is unknown.
+- **Activity history.** Successful doctor, patient, import and staff changes create an event with the actor ID and role, resource ID, action, timestamp, changed field names, and import counts. It does not copy patient field values or notes. Only admins can read the paginated history.
+- **Doctor account linking.** An admin creates a doctor login using the same email as an existing doctor record. The unique optional user-to-doctor link prevents a doctor record from getting multiple accounts. Deactivation blocks new logins and invalidates existing API sessions.
 - **Serverless-friendly Mongo.** The connection promise is cached on `globalThis`, so warm invocations reuse it and concurrent cold requests share one `connect()`. A failed connection isn't cached, so the next request retries.
 - **Rate limiting** uses the in-memory store, which is per instance. A shared store (Redis or Upstash) would be the next step if this ran on many instances.
 - **Hardening.** helmet, compression, a 100 kb JSON body limit, `trust proxy` for correct client IPs behind Vercel, and stack traces only outside production.

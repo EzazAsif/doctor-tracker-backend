@@ -5,6 +5,7 @@ import mongoose from 'mongoose';
 import { connectDB } from '../config/db';
 import { env } from '../config/env';
 import { UserModel } from '../models/User';
+import { ActivityModel } from '../models/Activity';
 import { DoctorModel } from '../models/Doctor';
 import { recountPatientCounts } from '../services/doctor.service';
 import { PatientModel, type CONDITIONS, type STATUSES } from '../models/Patient';
@@ -153,8 +154,8 @@ async function seed() {
   await connectDB();
   console.log('Connected, clearing collections...');
 
-  await Promise.all([UserModel.deleteMany({}), DoctorModel.deleteMany({}), PatientModel.deleteMany({})]);
-  await Promise.all([UserModel.syncIndexes(), DoctorModel.syncIndexes(), PatientModel.syncIndexes()]);
+  await Promise.all([ActivityModel.deleteMany({}), UserModel.deleteMany({}), DoctorModel.deleteMany({}), PatientModel.deleteMany({})]);
+  await Promise.all([UserModel.syncIndexes(), DoctorModel.syncIndexes(), PatientModel.syncIndexes(), ActivityModel.syncIndexes()]);
 
   await UserModel.create({
     name: 'Admin',

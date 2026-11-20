@@ -8,7 +8,7 @@ import type { AuthUser } from '../types/express';
 const DUMMY_HASH = '$2b$10$SUYfb7fU.r7SXzPCWBTWRuB4iA18pDUg3PUokBF/1OAE8B.NdQVa6';
 
 export async function login(email: string, password: string) {
-  const user = await UserModel.findOne({ email }).select('+password');
+  const user = await UserModel.findOne({ email, active: { $ne: false } }).select('+password');
   const ok = await bcrypt.compare(password, user?.password ?? DUMMY_HASH);
 
   if (!user || !ok) throw ApiError.unauthorized('Invalid email or password');
@@ -20,9 +20,9 @@ export async function login(email: string, password: string) {
 }
 
 export async function findUserById(id: string): Promise<AuthUser | null> {
-  return UserModel.findById(id).select('name email role').lean<AuthUser>();
+  return UserModel.findOne({ _id: id, active: { $ne: false } }).select('name email role doctor').lean<AuthUser>();
 }
 
-export function toPublicUser(u: { _id: unknown; name: string; email: string; role: string }) {
-  return { _id: u._id, name: u.name, email: u.email, role: u.role };
+export function toPublicUser(u: { _id: unknown; name: string; email: string; role: string; doctor?: unknown }) {
+  return { _id: u._id, name: u.name, email: u.email, role: u.role, ...(u.doctor ? { doctor: u.doctor } : {}) };
 }

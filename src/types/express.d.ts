@@ -4,7 +4,8 @@ export type AuthUser = {
   _id: Types.ObjectId;
   name: string;
   email: string;
-  role: 'admin';
+  role: 'admin' | 'doctor';
+  doctor?: Types.ObjectId;
 };
 
 declare global {
